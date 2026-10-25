@@ -1,0 +1,139 @@
+
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080808">
+<title>ROBU-AI | Intelligent Assistant</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080808;color:#fff;font-family:Arial,sans-serif}
+.app{max-width:850px;margin:auto;min-height:100vh;display:flex;flex-direction:column;padding:18px}
+header{display:flex;align-items:center;gap:12px;padding:12px 0 20px;border-bottom:1px solid #302919}
+.logo{width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#ffe89a,#b58a20);display:grid;place-items:center;color:#111;font-size:27px;font-weight:bold}
+h1{margin:0;font-size:24px;color:#f0cd68}
+header p{margin:5px 0 0;color:#aaa;font-size:12px}
+.badge{margin-left:auto;color:#e6c45e;border:1px solid #66521d;border-radius:20px;padding:7px;font-size:11px}
+.welcome{text-align:center;padding:65px 10px 35px}
+.welcome h2{font-size:clamp(27px,6vw,40px);margin:0 0 15px}
+.gold{color:#e8c45a}
+.welcome p{color:#aaa;line-height:1.7}
+.suggestions{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;margin-top:25px}
+button{cursor:pointer}
+.suggestions button{background:#151515;color:#e8d8a0;border:1px solid #393020;border-radius:22px;padding:11px}
+#chat{flex:1}
+.msg{display:flex;margin:15px 0;gap:10px;align-items:flex-start}
+.msg.user{flex-direction:row-reverse}
+.avatar{background:#292111;color:#f0cd68;border-radius:10px;padding:9px;font-weight:bold;font-size:12px}
+.bubble{background:#151515;border:1px solid #292929;border-radius:14px;padding:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;max-width:85%}
+.user .bubble{background:#28200d;border-color:#58451b}
+.composer{position:sticky;bottom:0;background:#080808;padding:15px 0 5px}
+.tools{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:9px;color:#aaa;font-size:13px}
+.tools button{background:none;border:0;color:#e8c45a}
+.inputbox{display:flex;gap:8px;padding:9px;background:#141414;border:1px solid #514326;border-radius:17px}
+textarea{flex:1;min-width:0;resize:vertical;min-height:45px;max-height:150px;background:none;border:0;outline:0;color:white;font-size:16px;padding:12px}
+.send{border:0;border-radius:12px;background:linear-gradient(135deg,#ffe89a,#bd9025);padding:0 17px;font-weight:bold;color:#111}
+#preview{display:none;max-width:110px;max-height:90px;margin-bottom:8px}
+.note{text-align:center;color:#777;font-size:11px;line-height:1.6}
+a{color:#e8c45a}
+@media(max-width:500px){.app{padding:12px}.welcome{padding-top:45px}.badge{font-size:9px}.send{padding:0 12px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo">R</div>
+  <div>
+    <h1>ROBU-AI</h1>
+    <p>Your Personal Intelligent Assistant</p>
+  </div>
+  <span class="badge">AI ASSISTANT</span>
+</header>
+
+<section class="welcome" id="welcome">
+  <h2>কীভাবে সাহায্য করতে পারি?</h2>
+  <p>আমি ROBU-AI। তোমার প্রশ্ন লেখো এবং শুরু করো!</p>
+  <div class="suggestions">
+    <button onclick="suggest('আমাকে বাংলায় একটি বিষয় বুঝিয়ে দাও')">📚 পড়াশোনা</button>
+    <button onclick="suggest('একটি সুন্দর HTML ও CSS ওয়েবসাইটের কোড দাও')">💻 কোডিং</button>
+    <button onclick="suggest('কৃত্রিম বুদ্ধিমত্তা কী? সহজভাবে বোঝাও')">🤖 AI সম্পর্কে</button>
+  </div>
+</section>
+
+<main id="chat"></main>
+
+<div class="composer">
+  <div class="tools">
+    <label>📷 ছবি <input id="image" type="file" accept="image/*" hidden></label>
+    <button onclick="document.getElementById('image').click()">ছবি বেছে নাও</button>
+    <button onclick="clearChat()">চ্যাট মুছুন</button>
+  </div>
+  <img id="preview" alt="Selected image">
+  <div class="inputbox">
+    <textarea id="message" placeholder="এখানে প্রশ্ন লেখো..." rows="1"></textarea>
+    <button class="send" onclick="sendMessage()">পাঠাও ↑</button>
+  </div>
+  <p class="note">ROBU-AI-এর এই সংস্করণটি ইন্টারফেস। সত্যিকারের AI উত্তর পেতে নিরাপদ API সংযোগ প্রয়োজন।</p>
+</div>
+</div>
+
+<script>
+const chat=document.getElementById('chat');
+const message=document.getElementById('message');
+const welcome=document.getElementById('welcome');
+let history=[];
+try{history=JSON.parse(localStorage.getItem('robuHistory')||'[]')}catch(e){history=[]}
+
+function addMessage(role,text){
+  welcome.style.display='none';
+  const row=document.createElement('div');
+  row.className='msg '+role;
+  const avatar=document.createElement('div');
+  avatar.className='avatar';
+  avatar.textContent=role==='user'?'YOU':'R';
+  const bubble=document.createElement('div');
+  bubble.className='bubble';
+  bubble.textContent=text;
+  row.append(avatar,bubble);
+  chat.appendChild(row);
+  row.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function suggest(text){message.value=text;message.focus()}
+function sendMessage(){
+  const text=message.value.trim();
+  const file=document.getElementById('image').files[0];
+  if(!text&&!file)return;
+  const prompt=text||(file?'এই ছবিটি বিশ্লেষণ করতে সাহায্য করো।':'');
+  addMessage('user',prompt+(file?'\nছবি: '+file.name:''));
+  history.push({role:'user',text:prompt});
+  message.value='';
+  const reply='তোমার প্রশ্নটি পেয়েছি! 😊\n\nএই মুহূর্তে ROBU-AI-এর চ্যাট ইন্টারফেস প্রস্তুত, কিন্তু আসল AI মডেল এখনো সংযুক্ত করা হয়নি। AI উত্তর, ছবি বিশ্লেষণ ও ওয়েব সার্চ চালু করতে পরবর্তী ধাপে নিরাপদ API সংযোগ করতে হবে।';
+  setTimeout(()=>{
+    addMessage('assistant',reply);
+    history.push({role:'assistant',text:reply});
+    history=history.slice(-30);
+    try{localStorage.setItem('robuHistory',JSON.stringify(history))}catch(e){}
+  },350);
+}
+function clearChat(){
+  if(!confirm('চ্যাট মুছে ফেলবে?'))return;
+  history=[];localStorage.removeItem('robuHistory');
+  chat.innerHTML='';welcome.style.display='block';
+}
+document.getElementById('image').addEventListener('change',function(){
+  const file=this.files[0];
+  if(!file)return;
+  if(!file.type.startsWith('image/')){alert('একটি ছবি নির্বাচন করো');return}
+  const preview=document.getElementById('preview');
+  preview.src=URL.createObjectURL(file);
+  preview.style.display='block';
+});
+message.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}
+});
+history.forEach(m=>addMessage(m.role==='user'?'user':'assistant',m.text));
+if(history.length)welcome.style.display='none';
+</script>
+</body>
+</html>
