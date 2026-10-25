@@ -78,62 +78,206 @@ a{color:#e8c45a}
 </div>
 </div>
 
-<script>
-const chat=document.getElementById('chat');
-const message=document.getElementById('message');
-const welcome=document.getElementById('welcome');
-let history=[];
-try{history=JSON.parse(localStorage.getItem('robuHistory')||'[]')}catch(e){history=[]}
 
-function addMessage(role,text){
-  welcome.style.display='none';
-  const row=document.createElement('div');
-  row.className='msg '+role;
-  const avatar=document.createElement('div');
-  avatar.className='avatar';
-  avatar.textContent=role==='user'?'YOU':'R';
-  const bubble=document.createElement('div');
-  bubble.className='bubble';
-  bubble.textContent=text;
-  row.append(avatar,bubble);
+<script>
+const chat = document.getElementById('chat');
+const message = document.getElementById('message');
+const welcome = document.getElementById('welcome');
+const imageInput = document.getElementById('image');
+const preview = document.getElementById('preview');
+
+let history = [];
+let busy = false;
+
+try {
+  history = JSON.parse(localStorage.getItem('robuHistory') || '[]');
+  if (!Array.isArray(history)) history = [];
+} catch (e) {
+  history = [];
+}
+
+const API_URL = 'https://robu-ai-backend.robiul6969robiul.workers.dev/';
+
+function saveHistory() {
+  history = history.slice(-30);
+  try {
+    localStorage.setItem('robuHistory', JSON.stringify(history));
+  } catch (e) {}
+}
+
+function addMessage(role, text) {
+  welcome.style.display = 'none';
+
+  const row = document.createElement('div');
+  row.className = 'msg ' + role;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'user' ? 'YOU' : 'R';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+
+  row.append(avatar, bubble);
   chat.appendChild(row);
-  row.scrollIntoView({behavior:'smooth',block:'nearest'});
+  row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  return bubble;
 }
-function suggest(text){message.value=text;message.focus()}
-function sendMessage(){
-  const text=message.value.trim();
-  const file=document.getElementById('image').files[0];
-  if(!text&&!file)return;
-  const prompt=text||(file?'এই ছবিটি বিশ্লেষণ করতে সাহায্য করো।':'');
-  addMessage('user',prompt+(file?'\nছবি: '+file.name:''));
-  history.push({role:'user',text:prompt});
-  message.value='';
-  const reply='তোমার প্রশ্নটি পেয়েছি! 😊\n\nএই মুহূর্তে ROBU-AI-এর চ্যাট ইন্টারফেস প্রস্তুত, কিন্তু আসল AI মডেল এখনো সংযুক্ত করা হয়নি। AI উত্তর, ছবি বিশ্লেষণ ও ওয়েব সার্চ চালু করতে পরবর্তী ধাপে নিরাপদ API সংযোগ করতে হবে।';
-  setTimeout(()=>{
-    addMessage('assistant',reply);
-    history.push({role:'assistant',text:reply});
-    history=history.slice(-30);
-    try{localStorage.setItem('robuHistory',JSON.stringify(history))}catch(e){}
-  },350);
+
+function suggest(text) {
+  message.value = text;
+  message.focus();
 }
-function clearChat(){
-  if(!confirm('চ্যাট মুছে ফেলবে?'))return;
-  history=[];localStorage.removeItem('robuHistory');
-  chat.innerHTML='';welcome.style.display='block';
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = String(reader.result);
+      resolve(result.split(',')[1]);
+    };
+
+    reader.onerror = () => reject(new Error('ছবিটি পড়া যায়নি।'));
+    reader.readAsDataURL(file);
+  });
 }
-document.getElementById('image').addEventListener('change',function(){
-  const file=this.files[0];
-  if(!file)return;
-  if(!file.type.startsWith('image/')){alert('একটি ছবি নির্বাচন করো');return}
-  const preview=document.getElementById('preview');
-  preview.src=URL.createObjectURL(file);
-  preview.style.display='block';
+
+async function sendMessage() {
+  if (busy) return;
+
+  const text = message.value.trim();
+  const file = imageInput.files[0];
+
+  if (!text && !file) return;
+
+  if (file && !file.type.startsWith('image/')) {
+    alert('একটি সঠিক ছবি নির্বাচন করো।');
+    return;
+  }
+
+  if (file && file.size > 4 * 1024 * 1024) {
+    alert('অনুগ্রহ করে ৪ MB-এর চেয়ে ছোট ছবি নির্বাচন করো।');
+    return;
+  }
+
+  const prompt = text || 'এই ছবিটি বিশ্লেষণ করে বুঝিয়ে দাও।';
+  const previousHistory = history.slice(-10).map(item => ({
+    role: item.role,
+    text: item.text
+  }));
+
+  addMessage('user', prompt + (file ? '\nছবি: ' + file.name : ''));
+
+  message.value = '';
+  busy = true;
+
+  const loadingBubble = addMessage('assistant', 'ROBU-AI উত্তর তৈরি করছে...');
+
+  try {
+    const body = {
+      message: prompt,
+      history: previousHistory
+    };
+
+    if (file) {
+      body.image = {
+        mimeType: file.type,
+        data: await fileToBase64(file)
+      };
+    }
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'AI সংযোগে সমস্যা হয়েছে।');
+    }
+
+    if (!result.reply) {
+      throw new Error('AI থেকে উত্তর পাওয়া যায়নি।');
+    }
+
+    loadingBubble.textContent = result.reply;
+
+    history.push(
+      { role: 'user', text: prompt },
+      { role: 'assistant', text: result.reply }
+    );
+
+    saveHistory();
+    imageInput.value = '';
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
+
+  } catch (error) {
+    loadingBubble.textContent =
+      'দুঃখিত! AI-এর সঙ্গে সংযোগ করা যায়নি।\n\nসমস্যা: ' +
+      (error.message || 'নেটওয়ার্ক বা সার্ভার সমস্যা।') +
+      '\n\nCloudflare Worker-এর Deploy status এবং API key পরীক্ষা করো।';
+  } finally {
+    busy = false;
+    message.focus();
+  }
+}
+
+function clearChat() {
+  if (!confirm('চ্যাট মুছে ফেলবে?')) return;
+
+  history = [];
+  try {
+    localStorage.removeItem('robuHistory');
+  } catch (e) {}
+
+  chat.innerHTML = '';
+  welcome.style.display = 'block';
+}
+
+imageInput.addEventListener('change', function () {
+  const file = this.files[0];
+
+  if (!file) {
+    preview.style.display = 'none';
+    return;
+  }
+
+  if (!file.type.startsWith('image/')) {
+    alert('একটি ছবি নির্বাচন করো।');
+    this.value = '';
+    return;
+  }
+
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
 });
-message.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}
+
+message.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage();
+  }
 });
-history.forEach(m=>addMessage(m.role==='user'?'user':'assistant',m.text));
-if(history.length)welcome.style.display='none';
+
+history.forEach(item => {
+  if (item && typeof item.text === 'string') {
+    addMessage(
+      item.role === 'user' ? 'user' : 'assistant',
+      item.text
+    );
+  }
+});
+
+if (history.length) {
+  welcome.style.display = 'none';
+}
 </script>
+
 </body>
 </html>
